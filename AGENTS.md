@@ -61,7 +61,7 @@ Every module from the root pom.xml, organized by function. Flink provides three 
 - `flink-annotations` — Stability annotations (`@Public`, `@PublicEvolving`, `@Internal`, `@Experimental`) and `@VisibleForTesting`
 - `flink-core-api` — Core API interfaces (functions, state, types) shared by all APIs
 - `flink-core` — Core implementation (type system, serialization, memory management, configuration)
-- `flink-runtime` — Distributed runtime (JobManager, TaskManager, scheduling, network, state)
+- `flink-runtime` — Distributed runtime (JobManager, TaskManager, scheduling, network, state). Also hosts the DataStream API and stream operator/task runtime (`org.apache.flink.streaming.*`, migrated here in FLINK-36063)
 - `flink-clients` — CLI and client-side job submission
 - `flink-rpc/` — RPC framework
   - `flink-rpc-core` — RPC interfaces
@@ -88,7 +88,7 @@ Every module from the root pom.xml, organized by function. Flink provides three 
 
 ### DataStream API (original streaming API)
 
-- `flink-streaming-java` — DataStream API and stream processing operator implementations
+- `flink-streaming-java` — DataStream API operators, user functions, and windowing strategies. Note: the core DataStream API, operator/task base classes, and `StreamGraph` now live in `flink-runtime` (`org.apache.flink.streaming.*`, since FLINK-36063)
 
 ### DataStream API v2 (newer event-driven API)
 
@@ -183,6 +183,21 @@ Every module from the root pom.xml, organized by function. Flink provides three 
 - `flink-architecture-tests` — ArchUnit architectural boundary tests
 - `tools/ci/flink-ci-tools` — CI tooling
 
+### Module-specific agent guides
+
+Several modules carry their own `AGENTS.md` with module-specific directory structure, key abstractions, change patterns, and testing guidance. Read the relevant one before working in that module:
+
+- [flink-core/AGENTS.md](flink-core/AGENTS.md) — type system, serialization, memory, configuration, file systems
+- [flink-runtime/AGENTS.md](flink-runtime/AGENTS.md) — distributed runtime; also hosts the `org.apache.flink.streaming.*` DataStream/operator runtime
+- [flink-streaming-java/AGENTS.md](flink-streaming-java/AGENTS.md) — residual DataStream operators, user functions, and windowing strategies
+- [flink-clients/AGENTS.md](flink-clients/AGENTS.md) — CLI and client-side job submission
+- [flink-connectors/flink-connector-base/AGENTS.md](flink-connectors/flink-connector-base/AGENTS.md) — Source/Sink base classes (FLIP-27 readers, async sinks)
+- [flink-state-backends/flink-statebackend-rocksdb/AGENTS.md](flink-state-backends/flink-statebackend-rocksdb/AGENTS.md) — RocksDB state backend
+- [flink-table/flink-table-common/AGENTS.md](flink-table/flink-table-common/AGENTS.md) — types, function definitions, type inference, catalog/connector interfaces
+- [flink-table/flink-table-api-java/AGENTS.md](flink-table/flink-table-api-java/AGENTS.md) — Table API entry points and config options
+- [flink-table/flink-table-planner/AGENTS.md](flink-table/flink-table-planner/AGENTS.md) — SQL/Table planning and optimization
+- [flink-table/flink-table-runtime/AGENTS.md](flink-table/flink-table-runtime/AGENTS.md) — Table/SQL runtime operators and functions
+
 ## Architecture Boundaries
 
 1. **Client** submits jobs to the cluster. Submission paths include the CLI (`bin/flink run` via `flink-clients`), the SQL Client (`bin/sql-client.sh` via `flink-sql-client`), the SQL Gateway (`flink-sql-gateway`, also accessible via JDBC driver), the REST API (direct HTTP to JobManager), programmatic execution (`StreamExecutionEnvironment.execute()` or `TableEnvironment.executeSql()`), and PyFlink (`flink-python`, wraps the Java APIs).
@@ -255,7 +270,7 @@ This section maps common types of Flink changes to the modules they touch and th
 
 - **Format Java files with Spotless immediately after editing:** `./mvnw spotless:apply`. Uses google-java-format with AOSP style.
 - **Scala formatting:** Spotless + scalafmt (config at `.scalafmt.conf`, maxColumn 100).
-- **Checkstyle:** `tools/maven/checkstyle.xml` (version defined in root `pom.xml` as `checkstyle.version`). Some modules (flink-core, flink-optimizer, flink-runtime) are not covered by checkstyle enforcement, but conventions should still be followed.
+- **Checkstyle:** `tools/maven/checkstyle.xml` (version defined in root `pom.xml` as `checkstyle.version`), bound in the `validate` phase for every module with `failOnViolation=true`. `flink-core` and `flink-runtime` override only their suppressions file (`suppressions-core.xml` / `suppressions-runtime.xml`), which exempts more files/checks than the default `suppressions.xml` but does not disable enforcement.
 - **No new Scala code.** All Flink Scala APIs are deprecated per FLIP-265. Write all new code in Java.
 - **Apache License 2.0 header** required on all new files (enforced by Apache Rat). Use an HTML comment for markdown files.
 - **API stability annotations:** Every user-facing API class and method must have a stability annotation. `@Public` (stable across minor releases), `@PublicEvolving` (may change in minor releases), `@Experimental` (may change at any time). These are all part of the public API surface that users build against. `@Internal` marks APIs with no stability guarantees that users should not depend on.
