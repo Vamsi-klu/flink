@@ -89,6 +89,50 @@ class ConstructedAccessFunctionsITCase {
     }
 
     @Test
+    public void testSqlAccessingNullableRowFieldReturnsNull() throws Exception {
+        // FLINK-34656: DOT/ITEM access on a NULL row whose field is declared NOT NULL must yield
+        // SQL NULL, not the field type's primitive default. The result materializes through the
+        // GenericRowData/BoxedWrapperRowData collect() path on which the bug surfaced.
+        final TableEnvironment env = TableEnvironment.create(EnvironmentSettings.inStreamingMode());
+        env.createTemporarySystemFunction("CustomScalarFunction", CustomScalarFunction.class);
+
+        TableResult result = env.executeSql("SELECT CustomScalarFunction().nested");
+        // inference already makes the field nullable because the row operand is nullable
+        assertThat(
+                        result.getResolvedSchema()
+                                .getColumnDataTypes()
+                                .get(0)
+                                .getLogicalType()
+                                .isNullable())
+                .isTrue();
+        try (CloseableIterator<Row> it = result.collect()) {
+            assertThat(it.next()).isEqualTo(Row.of((Object) null));
+            assertThat(it).isExhausted();
+        }
+    }
+
+    @Test
+    public void testSqlAccessingNotNullRowFieldReturnsValue() throws Exception {
+        // FLINK-34656 regression guard: DOT access on a NOT NULL row with a NOT NULL field must
+        // stay NOT NULL and return the value (the conditional generateDot fix must not broaden it).
+        final TableEnvironment env = TableEnvironment.create(EnvironmentSettings.inStreamingMode());
+        env.createTemporarySystemFunction("CustomScalarFunction", CustomScalarFunction.class);
+
+        TableResult result = env.executeSql("SELECT CustomScalarFunction(1).nested");
+        assertThat(
+                        result.getResolvedSchema()
+                                .getColumnDataTypes()
+                                .get(0)
+                                .getLogicalType()
+                                .isNullable())
+                .isFalse();
+        try (CloseableIterator<Row> it = result.collect()) {
+            assertThat(it.next()).isEqualTo(Row.of(1));
+            assertThat(it).isExhausted();
+        }
+    }
+
+    @Test
     public void testSqlAccessingNullableRowWithAlias() throws Exception {
         final TableEnvironment env = TableEnvironment.create(EnvironmentSettings.inStreamingMode());
         env.createTemporarySystemFunction("RowTableFunction", RowTableFunction.class);

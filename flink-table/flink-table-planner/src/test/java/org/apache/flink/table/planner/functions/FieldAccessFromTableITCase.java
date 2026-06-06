@@ -64,14 +64,25 @@ class FieldAccessFromTableITCase extends BuiltInFunctionTestBase {
                                 null,
                                 singletonMap("nested", 1),
                                 null,
-                                Row.of(1))
+                                Row.of(1),
+                                // FLINK-34656: nullable outer collection with a NOT NULL inner
+                                // element/value type. A null/out-of-bounds/missing access must
+                                // still yield SQL NULL, not the inner type's primitive default.
+                                null,
+                                new int[] {10},
+                                null,
+                                singletonMap("nested", 1))
                         .andDataTypes(
                                 ARRAY(BIGINT().nullable()).nullable(),
                                 ARRAY(BIGINT().notNull()).notNull(),
                                 MAP(STRING(), BIGINT().nullable()).nullable(),
                                 MAP(STRING(), BIGINT().notNull()).notNull(),
                                 ROW(FIELD("nested", BIGINT().nullable())).nullable(),
-                                ROW(FIELD("nested", BIGINT().notNull())).notNull())
+                                ROW(FIELD("nested", BIGINT().notNull())).notNull(),
+                                ARRAY(BIGINT().notNull()).nullable(),
+                                ARRAY(BIGINT().notNull()).nullable(),
+                                MAP(STRING(), BIGINT().notNull()).nullable(),
+                                MAP(STRING(), BIGINT().notNull()).nullable())
                         // accessing elements of MAP or ARRAY is a runtime operations,
                         // we do not know about the size or contents during the inference
                         // therefore the results are always nullable
@@ -79,6 +90,17 @@ class FieldAccessFromTableITCase extends BuiltInFunctionTestBase {
                         .testResult($("f1").at(1), "f1[1]", 1L, BIGINT().nullable())
                         .testResult($("f2").at("nested"), "f2['nested']", null, BIGINT().nullable())
                         .testResult($("f3").at("nested"), "f3['nested']", 1L, BIGINT().nullable())
+
+                        // FLINK-34656: null/out-of-bounds/missing access on a nullable
+                        // collection whose element/value is declared NOT NULL must return SQL
+                        // NULL. Before the fix these returned the primitive default (e.g. -1).
+                        .testResult($("f6").at(1), "f6[1]", null, BIGINT().nullable())
+                        .testResult($("f7").at(5), "f7[5]", null, BIGINT().nullable())
+                        .testResult($("f7").at(1), "f7[1]", 10L, BIGINT().nullable())
+                        .testResult($("f8").at("nested"), "f8['nested']", null, BIGINT().nullable())
+                        .testResult(
+                                $("f9").at("missing"), "f9['missing']", null, BIGINT().nullable())
+                        .testResult($("f9").at("nested"), "f9['nested']", 1L, BIGINT().nullable())
 
                         // we know all the fields of a type up front, therefore we can
                         // derive more accurate types during the inference

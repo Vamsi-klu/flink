@@ -1167,7 +1167,12 @@ object ScalarOperatorGens {
       resultTerm,
       nullTerm,
       resultCode,
-      access.resultType
+      // ITEM/DOT on a row yields SQL NULL only when the row operand may be null. Per
+      // SqlItemOperator#inferReturnType the field is made nullable iff the operand is
+      // nullable, so mirror that: a NOT NULL field of a NOT NULL row stays NOT NULL, while a
+      // null row yields SQL NULL instead of the field's primitive default (FLINK-34656).
+      if (operands.head.resultType.isNullable) access.resultType.copy(true)
+      else access.resultType
     )
   }
 
@@ -1454,7 +1459,11 @@ object ScalarOperatorGens {
          |   $idxStr < 0 || $idxStr >= ${array.resultTerm}.size() || $arrayIsNull;
          |$resultTypeTerm $resultTerm = $nullTerm ? $defaultTerm : $arrayGet;
          |""".stripMargin
-    GeneratedExpression(resultTerm, nullTerm, arrayAccessCode, componentInfo)
+    // ITEM on an array is always nullable (null container, null or out-of-bounds index ->
+    // SQL NULL, see SqlItemOperator#inferReturnType). Align the declared type with nullTerm
+    // so GenericRowData/BoxedWrapperRowData sinks emit NULL instead of the element type's
+    // primitive default (FLINK-34656).
+    GeneratedExpression(resultTerm, nullTerm, arrayAccessCode, componentInfo.copy(true))
   }
 
   def generateArrayElement(
@@ -1712,7 +1721,11 @@ object ScalarOperatorGens {
          |}
         """.stripMargin
 
-    GeneratedExpression(resultTerm, nullTerm, accessCode, valueType)
+    // ITEM on a map is always nullable (null map/key, missing key or null value -> SQL NULL,
+    // see SqlItemOperator#inferReturnType). Align the declared type with nullTerm so
+    // GenericRowData/BoxedWrapperRowData sinks emit NULL instead of the value type's
+    // primitive default (FLINK-34656).
+    GeneratedExpression(resultTerm, nullTerm, accessCode, valueType.copy(true))
   }
 
   def generateMapCardinality(

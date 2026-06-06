@@ -410,7 +410,17 @@ class ExprCodeGenerator(
          |}
          |""".stripMargin
 
-    GeneratedExpression(resultTerm, nullTerm, resultCode, fieldAccessExpr.resultType)
+    GeneratedExpression(
+      resultTerm,
+      nullTerm,
+      resultCode,
+      // A field access on a nullable row yields SQL NULL when the row is null, so the result
+      // must be nullable even if the field itself is declared NOT NULL. This mirrors the
+      // planner's own inference and lets GenericRowData/BoxedWrapperRowData sinks emit NULL
+      // instead of the field type's primitive default (FLINK-34656).
+      if (refExpr.resultType.isNullable) fieldAccessExpr.resultType.copy(true)
+      else fieldAccessExpr.resultType
+    )
   }
 
   override def visitLiteral(literal: RexLiteral): GeneratedExpression = {
