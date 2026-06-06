@@ -19,6 +19,7 @@
 package org.apache.flink.table.planner.functions.sql;
 
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlJsonValueReturning;
 import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.fun.SqlJsonValueFunction;
@@ -64,6 +65,14 @@ public class SqlJsonValueFunctionWrapper extends SqlJsonValueFunction {
     @Override
     public SqlReturnTypeInference getReturnTypeInference() {
         return returnTypeInference;
+    }
+
+    @Override
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+        if (!super.checkOperandTypes(callBinding, throwOnFailure)) {
+            return false;
+        }
+        return JsonFunctionsOperandChecks.checkFirstOperandIsCharacter(callBinding, throwOnFailure);
     }
 
     /**

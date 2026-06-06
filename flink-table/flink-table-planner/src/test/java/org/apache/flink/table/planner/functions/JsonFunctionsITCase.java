@@ -84,6 +84,9 @@ class JsonFunctionsITCase extends BuiltInFunctionTestBase {
         final List<TestSetSpec> testCases = new ArrayList<>();
         testCases.add(jsonExistsSpec());
         testCases.add(jsonValueSpec());
+        testCases.add(jsonValueNegativeSpec());
+        testCases.add(jsonExistsNegativeSpec());
+        testCases.add(jsonQueryNegativeSpec());
         testCases.addAll(isJsonSpec());
         testCases.addAll(jsonQuerySpec());
         testCases.addAll(jsonStringSpec());
@@ -299,6 +302,54 @@ class JsonFunctionsITCase extends BuiltInFunctionTestBase {
                         "JSON_VALUE(f0, '$.type'), JSON_VALUE(f0, '$.age')",
                         List.of("account", "42"),
                         List.of(STRING(), STRING()));
+    }
+
+    private static TestSetSpec jsonValueNegativeSpec() {
+        // FLINK-34507: the SQL path must reject a non-character JSON document argument, matching
+        // the
+        // Table API. JSON_VALUE(<int>, ...) validates without error on master (the bug); it must
+        // fail validation after the fix. (Bare untyped NULL is already rejected by Calcite as
+        // "Illegal use of 'NULL'" independently of this change, so it is not asserted here.)
+        return TestSetSpec.forFunction(BuiltInFunctionDefinitions.JSON_VALUE)
+                .onFieldsWithData(1)
+                .andDataTypes(INT())
+                .testSqlValidationError(
+                        "JSON_VALUE(f0, '$')",
+                        "The first argument of 'JSON_VALUE' must be a character string")
+                .testTableApiValidationError(
+                        $("f0").jsonValue("$"),
+                        String.format("Invalid function call:%nJSON_VALUE(INT"));
+    }
+
+    private static TestSetSpec jsonExistsNegativeSpec() {
+        // FLINK-34507: JSON_EXISTS is wired through a wrapper so the SQL path rejects a
+        // non-character document argument for both the 2-arg and 3-arg (ON ERROR) overloads.
+        return TestSetSpec.forFunction(BuiltInFunctionDefinitions.JSON_EXISTS)
+                .onFieldsWithData(123)
+                .andDataTypes(INT())
+                .testSqlValidationError(
+                        "JSON_EXISTS(f0, 'lax $')",
+                        "The first argument of 'JSON_EXISTS' must be a character string")
+                .testSqlValidationError(
+                        "JSON_EXISTS(f0, 'strict $.x' TRUE ON ERROR)",
+                        "The first argument of 'JSON_EXISTS' must be a character string")
+                .testTableApiValidationError(
+                        $("f0").jsonExists("lax $"),
+                        String.format("Invalid function call:%nJSON_EXISTS(INT"));
+    }
+
+    private static TestSetSpec jsonQueryNegativeSpec() {
+        // FLINK-34507: the JSON_QUERY SQL path rejects a non-character document argument; the check
+        // runs before the existing RETURNING ARRAY element-type validation.
+        return TestSetSpec.forFunction(BuiltInFunctionDefinitions.JSON_QUERY)
+                .onFieldsWithData(123)
+                .andDataTypes(INT())
+                .testSqlValidationError(
+                        "JSON_QUERY(f0, '$')",
+                        "The first argument of 'JSON_QUERY' must be a character string")
+                .testTableApiValidationError(
+                        $("f0").jsonQuery("$"),
+                        String.format("Invalid function call:%nJSON_QUERY(INT"));
     }
 
     private static List<TestSetSpec> isJsonSpec() {

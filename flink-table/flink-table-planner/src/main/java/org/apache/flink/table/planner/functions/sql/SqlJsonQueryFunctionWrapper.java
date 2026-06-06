@@ -73,6 +73,14 @@ public class SqlJsonQueryFunctionWrapper extends SqlJsonQueryFunction {
 
     @Override
     public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+        // Unlike JSON_VALUE/JSON_EXISTS, Calcite's SqlJsonQueryFunction checker reports a
+        // non-character document operand by returning false (without throwing), which Flink's
+        // validation does not surface as an error. Run the character check BEFORE delegating to
+        // super so the SQL path rejects a non-character first argument (FLINK-34507).
+        if (!JsonFunctionsOperandChecks.checkFirstOperandIsCharacter(callBinding, throwOnFailure)) {
+            return false;
+        }
+
         if (!super.checkOperandTypes(callBinding, throwOnFailure)) {
             return false;
         }
