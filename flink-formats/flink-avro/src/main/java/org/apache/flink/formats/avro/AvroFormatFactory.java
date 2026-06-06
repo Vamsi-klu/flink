@@ -70,13 +70,34 @@ public class AvroFormatFactory implements DeserializationFormatFactory, Serializ
                     DynamicTableSource.Context context,
                     DataType physicalDataType,
                     int[][] projections) {
-                final DataType producedDataType =
-                        Projection.of(projections).project(physicalDataType);
-                final RowType rowType = (RowType) producedDataType.getLogicalType();
-                final TypeInformation<RowData> rowDataTypeInfo =
+                final Projection projection = Projection.of(projections);
+
+                // The schema-less Avro binary on the wire contains every physical field and is
+                // decoded positionally, so the reader schema must be the FULL physical record.
+                // Feeding only the projected subset would mis-align the positional decode and
+                // silently corrupt (or throw on) any non-prefix projection (FLINK-35324).
+                final RowType physicalRowType = (RowType) physicalDataType.getLogicalType();
+                final DataType producedDataType = projection.project(physicalDataType);
+                final TypeInformation<RowData> producedTypeInfo =
                         context.createTypeInformation(producedDataType);
-                return new AvroRowDataDeserializationSchema(
-                        rowType, rowDataTypeInfo, encoding, legacyTimestampMapping);
+
+                // Identity / all-fields projection: behave exactly as before so the no-projection
+                // equality contract (see AvroFormatFactoryTest#testSeDeSchema) is preserved.
+                if (projection.equals(Projection.all(physicalDataType))) {
+                    return new AvroRowDataDeserializationSchema(
+                            physicalRowType, producedTypeInfo, encoding, legacyTimestampMapping);
+                }
+
+                // Decode the full record, then select/reorder the requested top-level columns
+                // after decoding via ProjectedRowData.
+                final AvroRowDataDeserializationSchema fullSchemaDeserializer =
+                        new AvroRowDataDeserializationSchema(
+                                physicalRowType,
+                                context.createTypeInformation(physicalDataType),
+                                encoding,
+                                legacyTimestampMapping);
+                return new ProjectingAvroRowDataDeserializationSchema(
+                        fullSchemaDeserializer, projection.toTopLevelIndexes(), producedTypeInfo);
             }
 
             @Override
