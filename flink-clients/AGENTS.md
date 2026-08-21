@@ -19,7 +19,7 @@ under the License.
 
 # flink-clients
 
-Client-side job submission: the `bin/flink` command-line entry point (`CliFrontend`) and the programmatic path that turns a user `Pipeline` into a `JobGraph` and hands it to a cluster. This module runs in the *client* JVM (or the application `main()`), never on JobManager/TaskManager; the deployment-target SPIs it implements (`PipelineExecutor`, `PipelineExecutorFactory`) are defined in `flink-core`, and per-target cluster descriptors (YARN, Kubernetes) live in their own modules.
+Client-side job submission: the `bin/flink` command-line entry point (`CliFrontend`) and the programmatic path that turns a user `Pipeline` into a `JobGraph` and hands it to a cluster. These classes usually run in the client JVM. In application mode the same entry-point path (`PackagedProgram`, `ClientUtils.executeProgram()`, `PackagedProgramApplication`) runs inside the Dispatcher/JobManager process (`Dispatcher.maybeSubmitApplicationInApplicationMode()`). User operators still execute only on TaskManagers. The deployment-target SPIs it implements (`PipelineExecutor`, `PipelineExecutorFactory`) are defined in `flink-core`, and per-target cluster descriptors (YARN, Kubernetes) live in their own modules.
 
 ## Build Commands
 

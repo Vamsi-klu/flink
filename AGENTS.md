@@ -201,7 +201,7 @@ Several modules carry their own `AGENTS.md` with module-specific directory struc
 ## Architecture Boundaries
 
 1. **Client** submits jobs to the cluster. Submission paths include the CLI (`bin/flink run` via `flink-clients`), the SQL Client (`bin/sql-client.sh` via `flink-sql-client`), the SQL Gateway (`flink-sql-gateway`, also accessible via JDBC driver), the REST API (direct HTTP to JobManager), programmatic execution (`StreamExecutionEnvironment.execute()` or `TableEnvironment.executeSql()`), and PyFlink (`flink-python`, wraps the Java APIs).
-2. **JobManager** (`flink-runtime`) orchestrates execution: receives jobs, creates the execution graph, manages scheduling, coordinates checkpoints, and handles failover. Never runs user code directly.
+2. **JobManager** (`flink-runtime`) orchestrates execution: receives jobs, creates the execution graph, manages scheduling, coordinates checkpoints, and handles failover. It does not run user operators. In application mode the user's `main()` can run in the Dispatcher/JobManager process; operators still execute only on TaskManagers.
 3. **TaskManager** (`flink-runtime`) executes the user's operators in task slots. Manages network buffers, state backends, and I/O.
 4. **Table Planner** (`flink-table-planner`) translates SQL/Table API programs into DataStream programs. The planner is loaded in a separate classloader (`flink-table-planner-loader`) to isolate Calcite dependencies.
 5. **Connectors** communicate with external systems. Source connectors implement the `Source` API (FLIP-27); sinks implement the `Sink` API (package `sink2`). Most connectors are externalized to separate repositories.

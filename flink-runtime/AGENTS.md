@@ -19,7 +19,7 @@ under the License.
 
 # flink-runtime
 
-The distributed runtime of Flink. The **JobManager** side orchestrates execution — the `Dispatcher` accepts jobs, each `JobMaster` builds and drives an `ExecutionGraph` via a `SchedulerNG`, the `ResourceManager` manages slots, and the `CheckpointCoordinator` coordinates checkpoints and failover. The **TaskManager** side (`TaskExecutor`) executes operators inside task slots and manages network buffers, state backends, and I/O. JobManager components never run user code; only the TaskManager (`Task` / `AbstractInvokable`) executes operators. Components communicate over the RPC framework (package `org.apache.flink.runtime.rpc`, implemented in `flink-rpc`), expose a REST API, and persist state through the state-backend framework.
+The distributed runtime of Flink. The **JobManager** side orchestrates execution — the `Dispatcher` accepts jobs, each `JobMaster` builds and drives an `ExecutionGraph` via a `SchedulerNG`, the `ResourceManager` manages slots, and the `CheckpointCoordinator` coordinates checkpoints and failover. The **TaskManager** side (`TaskExecutor`) executes operators inside task slots and manages network buffers, state backends, and I/O. User operators run only on the TaskManager (`Task` / `AbstractInvokable`). JobManager components do not run operators. In application mode the user's `main()` can run in the Dispatcher/JobManager via `Dispatcher.maybeSubmitApplicationInApplicationMode()` and `PackagedProgramApplication` (see [flink-clients/AGENTS.md](../flink-clients/AGENTS.md)). Components communicate over the RPC framework (package `org.apache.flink.runtime.rpc`, implemented in `flink-rpc`), expose a REST API, and persist state through the state-backend framework.
 
 This module is scoped below to the distributed runtime (`org.apache.flink.runtime.*`). Note that since FLINK-36063 it **also physically hosts** the DataStream API and the stream operator/task/windowing runtime under the `org.apache.flink.streaming.*` package (500+ files: `StreamExecutionEnvironment`, `DataStream`, `AbstractStreamOperator`, `StreamTask`, `StreamGraph`, `WindowOperator`, ...). For changes to those classes, see [flink-streaming-java/AGENTS.md](../flink-streaming-java/AGENTS.md), which documents that surface (the classes live here, but the patterns are described there).
 
@@ -96,7 +96,7 @@ Note: the RPC base types (`RpcEndpoint`, `RpcGateway`, `RpcService`) live in `fl
 
 1. Implement `AbstractRestHandler<G, RequestBody, ResponseBody, MessageParameters>` and a `MessageHeaders` describing the URL, method, and body types (under `rest/messages/`). Request/response bodies implement `RequestBody` / `ResponseBody`.
 2. Register the handler in the appropriate `*RestEndpoint` / `WebMonitorEndpoint` (e.g. `DispatcherRestEndpoint`).
-3. The generated REST API reference (`docs/.../rest_api_*.html`) is produced by `RestAPIDocGenerator` in `flink-docs` — regenerate it when you add or change endpoints.
+3. Regenerate the REST reference with `./mvnw package -Dgenerate-rest-docs -pl flink-docs -am -nsu -DskipTests`. That profile runs `RuntimeRestAPIDocGenerator` (HTML shortcodes under `docs/layouts/shortcodes/generated/`, e.g. `rest_v1_dispatcher.html`) and `RuntimeOpenApiSpecGenerator` (OpenAPI YAML under `docs/static/generated/`, e.g. `rest_v1_dispatcher.yml`). Do not invent `docs/.../rest_api_*.html` files or edit the generated output by hand. See [flink-docs/README.md](../flink-docs/README.md).
 
 ### Scheduling / failover changes
 
